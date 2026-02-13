@@ -1,27 +1,28 @@
 import { NextResponse } from "next/server";
 import { dbConnect } from "@/lib/db";
-import Settings, { getSettings } from "@/lib/models/settings";
-import { seedCategories } from "@/lib/seed";
+import { getSettings } from "@/lib/models/settings";
+import { apiHandler } from "@/lib/api-handler";
 
-export async function GET() {
+export const GET = apiHandler(async () => {
   await dbConnect();
-  await seedCategories();
   const settings = await getSettings();
 
-  // Mask the API key for security
   const masked = settings.toObject();
+  // Better API key masking: show only last 4 chars
   if (masked.geminiApiKey) {
     masked.geminiApiKey =
-      masked.geminiApiKey.slice(0, 4) + "..." + masked.geminiApiKey.slice(-4);
+      masked.geminiApiKey.length > 4
+        ? "••••" + masked.geminiApiKey.slice(-4)
+        : "••••";
   }
   // Don't expose drive tokens
   delete masked.googleDriveTokens;
   masked.googleDriveConnected = !!settings.googleDriveTokens?.refreshToken;
 
   return NextResponse.json({ settings: masked });
-}
+});
 
-export async function PUT(request: Request) {
+export const PUT = apiHandler(async (request: Request) => {
   await dbConnect();
   const body = await request.json();
   const settings = await getSettings();
@@ -47,10 +48,12 @@ export async function PUT(request: Request) {
   const masked = settings.toObject();
   if (masked.geminiApiKey) {
     masked.geminiApiKey =
-      masked.geminiApiKey.slice(0, 4) + "..." + masked.geminiApiKey.slice(-4);
+      masked.geminiApiKey.length > 4
+        ? "••••" + masked.geminiApiKey.slice(-4)
+        : "••••";
   }
   delete masked.googleDriveTokens;
   masked.googleDriveConnected = !!settings.googleDriveTokens?.refreshToken;
 
   return NextResponse.json({ settings: masked });
-}
+});

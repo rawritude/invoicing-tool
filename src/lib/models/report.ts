@@ -12,7 +12,7 @@ export interface IReport extends Document {
 
 const ReportSchema = new Schema<IReport>(
   {
-    name: { type: String, required: true },
+    name: { type: String, required: true, trim: true },
     description: { type: String },
     status: { type: String, enum: ["draft", "finalized"], default: "draft" },
     dateFrom: { type: Date },
@@ -20,6 +20,9 @@ const ReportSchema = new Schema<IReport>(
   },
   { timestamps: true }
 );
+
+ReportSchema.index({ status: 1 });
+ReportSchema.index({ createdAt: -1 });
 
 export default mongoose.models.Report ||
   mongoose.model<IReport>("Report", ReportSchema);

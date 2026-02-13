@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { dbConnect } from "@/lib/db";
 import { getSettings } from "@/lib/models/settings";
 import { extractReceiptData } from "@/lib/gemini";
+import { apiHandler } from "@/lib/api-handler";
+import { MAX_FILE_SIZE } from "@/lib/validate";
 
-export async function POST(request: Request) {
+export const POST = apiHandler(async (request: Request) => {
   await dbConnect();
   const settings = await getSettings();
 
@@ -24,14 +26,25 @@ export async function POST(request: Request) {
     );
   }
 
+  if (typeof fileData === "string" && fileData.length > MAX_FILE_SIZE) {
+    return NextResponse.json(
+      { error: "File too large (max 10MB)" },
+      { status: 400 }
+    );
+  }
+
   try {
-    const extracted = await extractReceiptData(fileData, mimeType, settings.geminiApiKey);
+    const extracted = await extractReceiptData(
+      fileData,
+      mimeType,
+      settings.geminiApiKey
+    );
     return NextResponse.json(extracted);
   } catch (error) {
     console.error("Gemini extraction error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "AI extraction failed" },
+      { error: "AI extraction failed" },
       { status: 500 }
     );
   }
-}
+});

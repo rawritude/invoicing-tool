@@ -39,9 +39,10 @@ export default mongoose.models.Settings ||
 
 export async function getSettings(): Promise<ISettings> {
   const Settings = mongoose.models.Settings || mongoose.model<ISettings>("Settings", SettingsSchema);
-  let settings = await Settings.findOne();
-  if (!settings) {
-    settings = await Settings.create({});
-  }
+  const settings = await Settings.findOneAndUpdate(
+    {},
+    { $setOnInsert: {} },
+    { upsert: true, new: true }
+  );
   return settings;
 }

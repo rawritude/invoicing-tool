@@ -58,7 +58,6 @@ export interface SettingsData {
   nextInvoiceNumber: number;
   businessName?: string;
   businessAddress?: string;
-  theme: "light" | "dark" | "system";
 }
 
 export interface ExchangeRateResult {

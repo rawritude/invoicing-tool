@@ -14,6 +14,7 @@ export default function UploadPage() {
   const [extracting, setExtracting] = useState(false);
   const [extracted, setExtracted] = useState<ExtractedReceiptData | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   async function handleFileSelected(selectedFile: File) {
     setFile(selectedFile);
@@ -49,6 +50,7 @@ export default function UploadPage() {
 
   async function handleSave(data: Record<string, unknown>) {
     setSaving(true);
+    setSaveError(null);
     try {
       const res = await fetch("/api/receipts", {
         method: "POST",
@@ -57,6 +59,9 @@ export default function UploadPage() {
       });
       if (res.ok) {
         router.push("/receipts");
+      } else {
+        const errorData = await res.json().catch(() => null);
+        setSaveError(errorData?.error || "Failed to save receipt. Please try again.");
       }
     } finally {
       setSaving(false);
@@ -71,6 +76,12 @@ export default function UploadPage() {
           Upload a receipt image or PDF to get started
         </p>
       </div>
+
+      {saveError && (
+        <div className="rounded-md border border-destructive bg-destructive/10 p-4 text-destructive">
+          {saveError}
+        </div>
+      )}
 
       {!file ? (
         <Dropzone onFileSelected={handleFileSelected} />

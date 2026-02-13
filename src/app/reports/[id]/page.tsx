@@ -25,13 +25,21 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
   const [report, setReport] = useState<ReportData | null>(null);
   const [receipts, setReceipts] = useState<ReportReceipt[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/reports/${id}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed to load report");
+        return r.json();
+      })
       .then((data) => {
         setReport(data.report);
         setReceipts(data.receipts || []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Failed to load report");
         setLoading(false);
       });
   }, [id]);
@@ -54,6 +62,14 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-md border border-destructive bg-destructive/10 p-4 text-destructive">
+        {error}
       </div>
     );
   }

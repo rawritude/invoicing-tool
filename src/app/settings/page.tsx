@@ -36,14 +36,19 @@ export default function SettingsPage() {
 
   async function saveSettings(updates: Partial<SettingsData>) {
     setSaving(true);
-    const res = await fetch("/api/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updates),
-    });
-    const data = await res.json();
-    setSettings(data.settings);
-    setSaving(false);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json();
+      setSettings(data.settings);
+    } catch {
+      // Save failed silently
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function saveApiKey() {
@@ -66,8 +71,12 @@ export default function SettingsPage() {
   }
 
   async function deleteCategory(id: string) {
-    await fetch(`/api/categories/${id}`, { method: "DELETE" });
-    loadData();
+    try {
+      await fetch(`/api/categories/${id}`, { method: "DELETE" });
+      loadData();
+    } catch {
+      // Delete failed silently
+    }
   }
 
   if (loading) {
@@ -97,7 +106,7 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Current: {settings?.geminiApiKey || "Not set"}
+              Current: {settings?.geminiApiKey ? "Configured" : "Not set"}
             </p>
             <div className="flex gap-2">
               <Input
@@ -239,6 +248,7 @@ export default function SettingsPage() {
                   <button
                     onClick={() => deleteCategory(cat._id!)}
                     className="ml-1 text-muted-foreground hover:text-destructive transition-colors"
+                    aria-label="Delete category"
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>
@@ -259,6 +269,7 @@ export default function SettingsPage() {
               value={newCategoryColor}
               onChange={(e) => setNewCategoryColor(e.target.value)}
               className="h-10 w-10 cursor-pointer rounded border"
+              aria-label="Pick category color"
             />
             <Button onClick={addCategory} variant="outline" disabled={!newCategoryName.trim()}>
               <Plus className="h-4 w-4 mr-1" />

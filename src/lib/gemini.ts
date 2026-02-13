@@ -57,7 +57,11 @@ export async function extractReceiptData(
   });
 
   const text = response.text ?? "";
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("AI returned invalid JSON response");
+  }
 }
 
 export async function interpretVoiceInput(
@@ -102,5 +106,9 @@ Valid field names: vendorName, date (YYYY-MM-DD format), subtotal, tax, total, c
   });
 
   const text = response.text ?? "";
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("AI returned invalid JSON response");
+  }
 }

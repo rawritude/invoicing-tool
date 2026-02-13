@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Download, Loader2, Check } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import type { CategoryData, ReportData } from "@/lib/types";
+import type { CategoryData } from "@/lib/types";
 
 interface ReceiptListItem {
   _id: string;
@@ -25,11 +25,11 @@ function InvoicesContent() {
   const preselectedReportId = searchParams.get("reportId");
 
   const [receipts, setReceipts] = useState<ReceiptListItem[]>([]);
-  const [reports, setReports] = useState<ReportData[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [invoiceType, setInvoiceType] = useState<"expense-report" | "client-invoice">("expense-report");
   const [generating, setGenerating] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Config fields
   const [title, setTitle] = useState("Expense Report");
@@ -40,21 +40,23 @@ function InvoicesContent() {
 
   useEffect(() => {
     async function load() {
-      const [receiptsRes, reportsRes] = await Promise.all([
-        fetch(preselectedReportId ? `/api/receipts?reportId=${preselectedReportId}` : "/api/receipts?limit=100"),
-        fetch("/api/reports"),
-      ]);
-      const receiptsData = await receiptsRes.json();
-      const reportsData = await reportsRes.json();
-      setReceipts(receiptsData.receipts || []);
-      setReports(reportsData.reports || []);
+      try {
+        const receiptsRes = await fetch(
+          preselectedReportId ? `/api/receipts?reportId=${preselectedReportId}` : "/api/receipts?limit=100"
+        );
+        if (!receiptsRes.ok) throw new Error("Failed to load receipts");
+        const receiptsData = await receiptsRes.json();
+        setReceipts(receiptsData.receipts || []);
 
-      // Pre-select all receipts if coming from a report
-      if (preselectedReportId && receiptsData.receipts) {
-        setSelectedIds(new Set(receiptsData.receipts.map((r: ReceiptListItem) => r._id)));
+        // Pre-select all receipts if coming from a report
+        if (preselectedReportId && receiptsData.receipts) {
+          setSelectedIds(new Set(receiptsData.receipts.map((r: ReceiptListItem) => r._id)));
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load data");
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     }
     load();
   }, [preselectedReportId]);
@@ -130,6 +132,12 @@ function InvoicesContent() {
         <p className="text-muted-foreground">Select receipts and generate a PDF</p>
       </div>
 
+      {error && (
+        <div className="rounded-md border border-destructive bg-destructive/10 p-4 text-destructive">
+          {error}
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Receipt selection */}
         <div className="lg:col-span-2 space-y-4">
@@ -150,34 +158,46 @@ function InvoicesContent() {
             </Card>
           ) : (
             <div className="space-y-2">
-              {receipts.map((r) => (
-                <Card
-                  key={r._id}
-                  className={`cursor-pointer transition-colors ${
-                    selectedIds.has(r._id) ? "border-primary bg-primary/5" : ""
-                  }`}
-                  onClick={() => toggleReceipt(r._id)}
-                >
-                  <CardContent className="p-3 flex items-center gap-3">
-                    <div
-                      className={`h-5 w-5 rounded border flex items-center justify-center shrink-0 ${
-                        selectedIds.has(r._id)
-                          ? "bg-primary border-primary"
-                          : "border-input"
-                      }`}
-                    >
-                      {selectedIds.has(r._id) && <Check className="h-3 w-3 text-primary-foreground" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{r.vendorName}</p>
-                      <p className="text-xs text-muted-foreground">{formatDate(r.date)}</p>
-                    </div>
-                    <span className="font-semibold shrink-0">
-                      {formatCurrency(r.total, r.originalCurrency)}
-                    </span>
-                  </CardContent>
-                </Card>
-              ))}
+              {receipts.map((r) => {
+                const isSelected = selectedIds.has(r._id);
+                return (
+                  <Card
+                    key={r._id}
+                    className={`cursor-pointer transition-colors ${
+                      isSelected ? "border-primary bg-primary/5" : ""
+                    }`}
+                    onClick={() => toggleReceipt(r._id)}
+                  >
+                    <CardContent className="p-3 flex items-center gap-3">
+                      <div
+                        role="checkbox"
+                        aria-checked={isSelected}
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === " " || e.key === "Enter") {
+                            e.preventDefault();
+                            toggleReceipt(r._id);
+                          }
+                        }}
+                        className={`h-5 w-5 rounded border flex items-center justify-center shrink-0 ${
+                          isSelected
+                            ? "bg-primary border-primary"
+                            : "border-input"
+                        }`}
+                      >
+                        {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{r.vendorName}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(r.date)}</p>
+                      </div>
+                      <span className="font-semibold shrink-0">
+                        {formatCurrency(r.total, r.originalCurrency)}
+                      </span>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>

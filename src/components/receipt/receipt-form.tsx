@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,10 @@ import type { LineItem, CategoryData, ReportData } from "@/lib/types";
 import { VoiceInput } from "@/components/receipt/voice-input";
 import { Plus, Trash2, Save, Loader2, ArrowRightLeft } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+
+interface LineItemWithId extends LineItem {
+  id: string;
+}
 
 interface ReceiptFormProps {
   initialData?: {
@@ -34,6 +38,10 @@ interface ReceiptFormProps {
   saving?: boolean;
 }
 
+function withIds(items: LineItem[]): LineItemWithId[] {
+  return items.map((item) => ({ ...item, id: crypto.randomUUID() }));
+}
+
 export function ReceiptForm({
   initialData,
   fileData,
@@ -45,7 +53,7 @@ export function ReceiptForm({
 }: ReceiptFormProps) {
   const [vendorName, setVendorName] = useState(initialData?.vendorName || "");
   const [date, setDate] = useState(initialData?.date || new Date().toISOString().split("T")[0]);
-  const [lineItems, setLineItems] = useState<LineItem[]>(initialData?.lineItems || []);
+  const [lineItems, setLineItems] = useState<LineItemWithId[]>(withIds(initialData?.lineItems || []));
   const [subtotal, setSubtotal] = useState<number | undefined>(initialData?.subtotal);
   const [tax, setTax] = useState<number | undefined>(initialData?.tax);
   const [total, setTotal] = useState<number>(initialData?.total || 0);
@@ -60,6 +68,9 @@ export function ReceiptForm({
   const [exchangeRate, setExchangeRate] = useState<number | null>(null);
   const [loadingRate, setLoadingRate] = useState(false);
 
+  const initialCategoryRef = useRef(initialData?.suggestedCategory);
+  const prevInitialDataRef = useRef(initialData);
+
   // Load categories, reports, and settings
   useEffect(() => {
     Promise.all([
@@ -72,28 +83,33 @@ export function ReceiptForm({
       setDefaultCurrency(settingsData.settings?.defaultCurrency || "USD");
 
       // Auto-select category if suggested
-      if (initialData?.suggestedCategory && catData.categories) {
+      const suggested = initialCategoryRef.current;
+      if (suggested && catData.categories) {
         const match = catData.categories.find(
           (c: CategoryData) =>
-            c.name.toLowerCase() === initialData.suggestedCategory?.toLowerCase()
+            c.name.toLowerCase() === suggested.toLowerCase()
         );
-        if (match) setCategory(match._id!);
+        if (match) {
+          setCategory(match._id!);
+          return;
+        }
       }
-      if (!category && catData.categories?.length > 0) {
-        // Default to first category if none set
+      if (catData.categories?.length > 0) {
         const misc = catData.categories.find((c: CategoryData) => c.name === "Miscellaneous");
         if (misc) setCategory(misc._id!);
         else setCategory(catData.categories[0]._id!);
       }
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Update form when initialData changes (e.g., after AI extraction or voice update)
   useEffect(() => {
+    if (initialData === prevInitialDataRef.current) return;
+    prevInitialDataRef.current = initialData;
+
     if (initialData?.vendorName) setVendorName(initialData.vendorName);
     if (initialData?.date) setDate(initialData.date);
-    if (initialData?.lineItems) setLineItems(initialData.lineItems);
+    if (initialData?.lineItems) setLineItems(withIds(initialData.lineItems));
     if (initialData?.subtotal !== undefined) setSubtotal(initialData.subtotal);
     if (initialData?.tax !== undefined) setTax(initialData.tax);
     if (initialData?.total !== undefined) setTotal(initialData.total);
@@ -119,7 +135,7 @@ export function ReceiptForm({
   }, [originalCurrency, defaultCurrency, date]);
 
   function addLineItem() {
-    setLineItems([...lineItems, { description: "", amount: 0 }]);
+    setLineItems([...lineItems, { description: "", amount: 0, id: crypto.randomUUID() }]);
   }
 
   function updateLineItem(index: number, field: keyof LineItem, value: string | number) {
@@ -136,7 +152,7 @@ export function ReceiptForm({
     const data: Record<string, unknown> = {
       vendorName,
       date,
-      lineItems,
+      lineItems: lineItems.map(({ id: _id, ...rest }) => rest),
       subtotal,
       tax,
       total,
@@ -319,7 +335,7 @@ export function ReceiptForm({
             {lineItems.length > 0 ? (
               <div className="space-y-2">
                 {lineItems.map((item, i) => (
-                  <div key={i} className="flex gap-2 items-start">
+                  <div key={item.id} className="flex gap-2 items-start">
                     <Input
                       placeholder="Description"
                       value={item.description}
@@ -341,7 +357,7 @@ export function ReceiptForm({
                       onChange={(e) => updateLineItem(i, "amount", parseFloat(e.target.value) || 0)}
                       className="w-28"
                     />
-                    <Button variant="ghost" size="icon" onClick={() => removeLineItem(i)}>
+                    <Button variant="ghost" size="icon" onClick={() => removeLineItem(i)} aria-label="Remove line item">
                       <Trash2 className="h-4 w-4 text-muted-foreground" />
                     </Button>
                   </div>

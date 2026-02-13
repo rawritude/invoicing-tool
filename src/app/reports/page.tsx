@@ -13,15 +13,23 @@ import type { ReportData } from "@/lib/types";
 export default function ReportsPage() {
   const [reports, setReports] = useState<ReportData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
 
   const loadReports = useCallback(async () => {
-    const res = await fetch("/api/reports");
-    const data = await res.json();
-    setReports(data.reports || []);
-    setLoading(false);
+    setError(null);
+    try {
+      const res = await fetch("/api/reports");
+      if (!res.ok) throw new Error("Failed to load reports");
+      const data = await res.json();
+      setReports(data.reports || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load reports");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { loadReports(); }, [loadReports]);
@@ -65,6 +73,12 @@ export default function ReportsPage() {
           New Report
         </Button>
       </div>
+
+      {error && (
+        <div className="rounded-md border border-destructive bg-destructive/10 p-4 text-destructive">
+          {error}
+        </div>
+      )}
 
       {showCreate && (
         <Card>
@@ -113,7 +127,7 @@ export default function ReportsPage() {
                     <Badge variant={report.status === "finalized" ? "default" : "secondary"}>
                       {report.status}
                     </Badge>
-                    <Button variant="ghost" size="icon" onClick={() => deleteReport(report._id!)}>
+                    <Button variant="ghost" size="icon" onClick={() => deleteReport(report._id!)} aria-label="Delete report">
                       <Trash2 className="h-4 w-4 text-muted-foreground" />
                     </Button>
                   </div>

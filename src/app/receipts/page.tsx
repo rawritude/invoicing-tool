@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,27 +29,46 @@ export default function ReceiptsPage() {
   const [receipts, setReceipts] = useState<ReceiptListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [categories, setCategories] = useState<CategoryData[]>([]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleSearchChange(value: string) {
+    setSearch(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(value);
+    }, 300);
+  }
 
   const loadReceipts = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (search) params.set("search", search);
-    if (categoryFilter) params.set("category", categoryFilter);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.set("search", debouncedSearch);
+      if (categoryFilter) params.set("category", categoryFilter);
 
-    const res = await fetch(`/api/receipts?${params}`);
-    const data = await res.json();
-    setReceipts(data.receipts || []);
-    setTotal(data.total || 0);
-    setLoading(false);
-  }, [search, categoryFilter]);
+      const res = await fetch(`/api/receipts?${params}`);
+      if (!res.ok) throw new Error("Failed to load receipts");
+      const data = await res.json();
+      setReceipts(data.receipts || []);
+      setTotal(data.total || 0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load receipts");
+    } finally {
+      setLoading(false);
+    }
+  }, [debouncedSearch, categoryFilter]);
 
   useEffect(() => {
     fetch("/api/categories")
       .then((r) => r.json())
-      .then((data) => setCategories(data.categories || []));
+      .then((data) => setCategories(data.categories || []))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -84,7 +103,7 @@ export default function ReceiptsPage() {
           <Input
             placeholder="Search vendor..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="pl-9"
           />
         </div>
@@ -98,6 +117,12 @@ export default function ReceiptsPage() {
           className="max-w-xs"
         />
       </div>
+
+      {error && (
+        <div className="rounded-md border border-destructive bg-destructive/10 p-4 text-destructive">
+          {error}
+        </div>
+      )}
 
       {/* Receipt list */}
       {loading ? (
@@ -165,6 +190,7 @@ export default function ReceiptsPage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => deleteReceipt(receipt._id)}
+                      aria-label="Delete receipt"
                     >
                       <Trash2 className="h-4 w-4 text-muted-foreground" />
                     </Button>

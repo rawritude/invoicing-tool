@@ -36,6 +36,16 @@ export function Navbar() {
 
   useEffect(() => setMounted(true), []);
 
+  // Close mobile menu on Escape
+  useEffect(() => {
+    if (!mobileOpen) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setMobileOpen(false);
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [mobileOpen]);
+
   return (
     <>
       {/* Desktop navbar */}

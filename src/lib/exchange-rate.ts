@@ -28,12 +28,20 @@ export async function getExchangeRate(
     throw new Error(`No rate found for ${toCurrency}`);
   }
 
+  if (rateCache.size >= 1000) {
+    const oldestKey = rateCache.keys().next().value;
+    if (oldestKey !== undefined) rateCache.delete(oldestKey);
+  }
   rateCache.set(cacheKey, { rate, fetchedAt: Date.now() });
   return rate;
 }
 
+let currenciesCache: Record<string, string> | null = null;
+
 export async function getCurrencies(): Promise<Record<string, string>> {
+  if (currenciesCache) return currenciesCache;
   const res = await fetch(`${FRANKFURTER_BASE}/currencies`);
   if (!res.ok) throw new Error("Failed to fetch currencies");
-  return res.json();
+  currenciesCache = await res.json();
+  return currenciesCache!;
 }

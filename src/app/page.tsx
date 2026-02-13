@@ -2,19 +2,11 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Receipt, FolderOpen, Upload, Loader2, TrendingUp } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from "recharts";
 
 interface CategoryBreakdown {
   _id: string;
@@ -32,6 +24,45 @@ interface RecentReceipt {
   category: { name: string; color: string };
 }
 
+const SpendingChart = dynamic(
+  () =>
+    import("recharts").then((mod) => {
+      const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } = mod;
+      function Chart({ data }: { data: CategoryBreakdown[] }) {
+        return (
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data} layout="vertical">
+                <XAxis type="number" hide />
+                <YAxis
+                  type="category"
+                  dataKey="_id"
+                  width={120}
+                  tick={{ fontSize: 12 }}
+                />
+                <Tooltip
+                  formatter={(value) => [`$${Number(value).toFixed(2)}`, "Total"]}
+                  contentStyle={{
+                    background: "var(--color-card)",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "8px",
+                  }}
+                />
+                <Bar dataKey="total" radius={[0, 4, 4, 0]}>
+                  {data.map((entry, index) => (
+                    <Cell key={index} fill={entry.color || "#6366f1"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      }
+      return Chart;
+    }),
+  { ssr: false, loading: () => <div className="h-64 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div> }
+);
+
 export default function DashboardPage() {
   const [data, setData] = useState<{
     totalReceipts: number;
@@ -39,12 +70,25 @@ export default function DashboardPage() {
     recentReceipts: RecentReceipt[];
     categoryBreakdown: CategoryBreakdown[];
   } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/dashboard")
-      .then((r) => r.json())
-      .then(setData);
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed to load dashboard data");
+        return r.json();
+      })
+      .then(setData)
+      .catch((err) => setError(err.message));
   }, []);
+
+  if (error) {
+    return (
+      <div className="rounded-md border border-destructive bg-destructive/10 p-4 text-destructive">
+        {error}
+      </div>
+    );
+  }
 
   if (!data) {
     return (
@@ -174,32 +218,7 @@ export default function DashboardPage() {
                 Charts will appear once you have receipts.
               </p>
             ) : (
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.categoryBreakdown} layout="vertical">
-                    <XAxis type="number" hide />
-                    <YAxis
-                      type="category"
-                      dataKey="_id"
-                      width={120}
-                      tick={{ fontSize: 12 }}
-                    />
-                    <Tooltip
-                      formatter={(value) => [`$${Number(value).toFixed(2)}`, "Total"]}
-                      contentStyle={{
-                        background: "var(--color-card)",
-                        border: "1px solid var(--color-border)",
-                        borderRadius: "8px",
-                      }}
-                    />
-                    <Bar dataKey="total" radius={[0, 4, 4, 0]}>
-                      {data.categoryBreakdown.map((entry, index) => (
-                        <Cell key={index} fill={entry.color || "#6366f1"} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              <SpendingChart data={data.categoryBreakdown} />
             )}
           </CardContent>
         </Card>

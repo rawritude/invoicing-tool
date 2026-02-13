@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { dbConnect } from "@/lib/db";
 import { getSettings } from "@/lib/models/settings";
 import { interpretVoiceInput } from "@/lib/gemini";
+import { apiHandler } from "@/lib/api-handler";
 
-export async function POST(request: Request) {
+export const POST = apiHandler(async (request: Request) => {
   await dbConnect();
   const settings = await getSettings();
 
@@ -35,8 +36,8 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Voice interpretation error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Voice interpretation failed" },
+      { error: "Voice interpretation failed" },
       { status: 500 }
     );
   }
-}
+});

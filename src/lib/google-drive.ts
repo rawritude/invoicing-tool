@@ -2,10 +2,16 @@ import { google } from "googleapis";
 import { Readable } from "stream";
 
 function getOAuth2Client() {
+  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI } = process.env;
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
+    throw new Error(
+      "Missing Google OAuth environment variables: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI must be set"
+    );
+  }
   return new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    GOOGLE_REDIRECT_URI
   );
 }
 
@@ -38,6 +44,11 @@ export async function uploadFileToDrive(
     expiry_date: tokens.expiryDate,
   });
 
+  let refreshedTokens: { access_token?: string | null; refresh_token?: string | null; expiry_date?: number | null } | null = null;
+  client.on("tokens", (t) => {
+    refreshedTokens = t;
+  });
+
   const drive = google.drive({ version: "v3", auth: client });
 
   const requestBody: { name: string; parents?: string[] } = { name: fileName };
@@ -57,6 +68,7 @@ export async function uploadFileToDrive(
   return {
     driveFileId: response.data.id,
     webViewLink: response.data.webViewLink,
+    refreshedTokens,
   };
 }
 

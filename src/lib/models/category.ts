@@ -10,7 +10,7 @@ export interface ICategory extends Document {
 
 const CategorySchema = new Schema<ICategory>(
   {
-    name: { type: String, required: true, unique: true },
+    name: { type: String, required: true, unique: true, trim: true },
     color: { type: String, default: "#a3a3a3" },
     isDefault: { type: Boolean, default: false },
   },

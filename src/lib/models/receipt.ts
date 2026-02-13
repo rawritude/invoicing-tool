@@ -30,21 +30,24 @@ export interface IReceipt extends Document {
   updatedAt: Date;
 }
 
-const LineItemSchema = new Schema<ILineItem>({
-  description: { type: String, required: true },
-  quantity: { type: Number },
-  unitPrice: { type: Number },
-  amount: { type: Number, required: true },
-});
+const LineItemSchema = new Schema<ILineItem>(
+  {
+    description: { type: String, required: true },
+    quantity: { type: Number },
+    unitPrice: { type: Number },
+    amount: { type: Number, required: true, min: 0 },
+  },
+  { _id: false }
+);
 
 const ReceiptSchema = new Schema<IReceipt>(
   {
-    vendorName: { type: String, required: true },
+    vendorName: { type: String, required: true, trim: true },
     date: { type: Date, required: true },
     lineItems: { type: [LineItemSchema], default: [] },
-    subtotal: { type: Number },
-    tax: { type: Number },
-    total: { type: Number, required: true },
+    subtotal: { type: Number, min: 0 },
+    tax: { type: Number, min: 0 },
+    total: { type: Number, required: true, min: 0 },
     originalCurrency: { type: String, required: true, default: "USD" },
     convertedCurrency: { type: String },
     convertedTotal: { type: Number },

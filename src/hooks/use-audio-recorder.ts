@@ -7,11 +7,13 @@ export function useAudioRecorder() {
   const [error, setError] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const startRecording = useCallback(async () => {
     setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: "audio/webm;codecs=opus",
       });
@@ -46,6 +48,7 @@ export function useAudioRecorder() {
 
         // Stop all tracks
         mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
 
         // Convert to base64
         const reader = new FileReader();
@@ -63,5 +66,16 @@ export function useAudioRecorder() {
     });
   }, []);
 
-  return { isRecording, startRecording, stopRecording, error };
+  const cleanup = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setIsRecording(false);
+  }, []);
+
+  return { isRecording, startRecording, stopRecording, error, cleanup };
 }

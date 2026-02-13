@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { dbConnect } from "@/lib/db";
 import Receipt from "@/lib/models/receipt";
+import Settings from "@/lib/models/settings";
 import { getSettings } from "@/lib/models/settings";
 import { generateExpenseReport } from "@/lib/pdf/expense-report";
 import { generateClientInvoice } from "@/lib/pdf/client-invoice";
+import { apiHandler } from "@/lib/api-handler";
+import { isValidObjectId } from "@/lib/validate";
 
-export async function POST(request: Request) {
+export const POST = apiHandler(async (request: Request) => {
   await dbConnect();
   const body = await request.json();
   const { type, receiptIds, config } = body;
@@ -17,7 +20,17 @@ export async function POST(request: Request) {
     );
   }
 
-  // Fetch receipts with file data
+  // Validate all receiptIds
+  if (
+    !Array.isArray(receiptIds) ||
+    !receiptIds.every((id: unknown) => typeof id === "string" && isValidObjectId(id))
+  ) {
+    return NextResponse.json(
+      { error: "Invalid receiptIds" },
+      { status: 400 }
+    );
+  }
+
   const receipts = await Receipt.find({ _id: { $in: receiptIds } })
     .populate("category")
     .sort({ date: -1 });
@@ -28,49 +41,46 @@ export async function POST(request: Request) {
 
   const settings = await getSettings();
 
-  try {
-    let pdfBuffer: Buffer;
+  let pdfBuffer: Buffer;
 
-    if (type === "expense-report") {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      pdfBuffer = await generateExpenseReport(receipts as any, {
-        title: config?.title || "Expense Report",
-        businessName: settings.businessName,
-        businessAddress: settings.businessAddress,
-        dateRange: config?.dateRange,
-        notes: config?.notes,
-      });
-    } else if (type === "client-invoice") {
-      // Auto-generate invoice number
-      const invoiceNumber = `${settings.invoiceNumberPrefix}${String(settings.nextInvoiceNumber).padStart(4, "0")}`;
-      settings.nextInvoiceNumber = (settings.nextInvoiceNumber || 1) + 1;
-      await settings.save();
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      pdfBuffer = await generateClientInvoice(receipts as any, {
-        invoiceNumber,
-        clientName: config?.clientName || "Client",
-        clientAddress: config?.clientAddress,
-        businessName: settings.businessName,
-        businessAddress: settings.businessAddress,
-        dueDate: config?.dueDate,
-        notes: config?.notes,
-      });
-    } else {
-      return NextResponse.json({ error: "Invalid type" }, { status: 400 });
-    }
-
-    return new NextResponse(new Uint8Array(pdfBuffer), {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${type}-${Date.now()}.pdf"`,
-      },
+  if (type === "expense-report") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    pdfBuffer = await generateExpenseReport(receipts as any, {
+      title: config?.title || "Expense Report",
+      businessName: settings.businessName,
+      businessAddress: settings.businessAddress,
+      dateRange: config?.dateRange,
+      notes: config?.notes,
     });
-  } catch (error) {
-    console.error("PDF generation error:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "PDF generation failed" },
-      { status: 500 }
+  } else if (type === "client-invoice") {
+    // Atomic increment to prevent race conditions
+    const updated = await Settings.findOneAndUpdate(
+      {},
+      { $inc: { nextInvoiceNumber: 1 } },
+      { returnDocument: "before" }
     );
+    const currentNumber = updated?.nextInvoiceNumber || 1;
+    const prefix = updated?.invoiceNumberPrefix || "INV-";
+    const invoiceNumber = `${prefix}${String(currentNumber).padStart(4, "0")}`;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    pdfBuffer = await generateClientInvoice(receipts as any, {
+      invoiceNumber,
+      clientName: config?.clientName || "Client",
+      clientAddress: config?.clientAddress,
+      businessName: settings.businessName,
+      businessAddress: settings.businessAddress,
+      dueDate: config?.dueDate,
+      notes: config?.notes,
+    });
+  } else {
+    return NextResponse.json({ error: "Invalid type" }, { status: 400 });
   }
-}
+
+  return new NextResponse(new Uint8Array(pdfBuffer), {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${type}-${Date.now()}.pdf"`,
+    },
+  });
+});
